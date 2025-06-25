@@ -20,6 +20,11 @@ return [
             'client_id' => env('SSO_TWITTER_CLIENT_ID'),
             'client_secret' => env('SSO_TWITTER_CLIENT_SECRET'),
             'redirect' => env('SSO_TWITTER_REDIRECT'),
+        ],
+        'jumpcloud' => [
+            'client_id' => env('SSO_JUMPCLOUD_CLIENT_ID'),
+            'client_secret' => env('SSO_JUMPCLOUD_CLIENT_SECRET'),
+            'redirect' => env('SSO_JUMPCLOUD_REDIRECT'),
         ]
     ],
 ];

@@ -1,6 +1,7 @@
 <?php
 namespace Sahdev\SSO\Providers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 class GoogleProvider
@@ -19,7 +20,7 @@ class GoogleProvider
         return redirect('https://accounts.google.com/o/oauth2/v2/auth?' . $query);
     }
 
-    public function callback()
+    public function callback(Request $request)
     {
         try {
             $code = request('code');

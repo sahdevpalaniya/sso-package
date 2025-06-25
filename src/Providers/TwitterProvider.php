@@ -1,6 +1,8 @@
 <?php
+
 namespace Sahdev\SSO\Providers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 class TwitterProvider
@@ -20,7 +22,7 @@ class TwitterProvider
         return redirect("https://twitter.com/i/oauth2/authorize?$query");
     }
 
-    public function callback()
+    public function callback(Request $request)
     {
         try {
             $code = request('code');

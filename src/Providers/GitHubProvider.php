@@ -1,6 +1,7 @@
 <?php
 namespace Sahdev\SSO\Providers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 class GitHubProvider
@@ -17,7 +18,7 @@ class GitHubProvider
         return redirect("https://github.com/login/oauth/authorize?$query");
     }
 
-    public function callback()
+    public function callback(Request $request)
     {
         try {
             $code = request('code');
