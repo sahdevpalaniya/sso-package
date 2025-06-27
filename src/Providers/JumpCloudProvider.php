@@ -18,16 +18,21 @@ class JumpCloudProvider implements SSOProviderInterface
 
     public function __construct()
     {
-        $this->clientId = config('sso.providers.jumpcloud.client_id');
-        $this->clientSecret = config('sso.providers.jumpcloud.client_secret');
-        $this->redirectUri = config('sso.providers.jumpcloud.redirect');
+        $this->clientId = config('sso.jumpcloud.client_id');
+        $this->clientSecret = config('sso.jumpcloud.client_secret');
+        $this->redirectUri = config('sso.jumpcloud.redirect');
     }
 
-    /**
-     * Redirect the user to the JumpCloud authentication page.
-     *
-     * @return \Illuminate\Http\RedirectResponse
-     */
+    protected function formatResponse($status, $statusCode, $message, $data = null)
+    {
+        return [
+            'status' => $status,
+            'status_code' => $statusCode,
+            'message' => $message,
+            'data' => $data,
+        ];
+    }
+
     public function redirect()
     {
         $state = Str::random(40);
@@ -44,22 +49,16 @@ class JumpCloudProvider implements SSOProviderInterface
         return redirect($this->authUrl . '?' . $query);
     }
 
-    /**
-     * Handle the callback from JumpCloud.
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function callback(Request $request)
     {
         $state = session('jumpcloud_oauth_state');
 
         if (!$request->has('state') || $request->state !== $state) {
-            return response()->json(['message' => 'Invalid state parameter'], 400);
+            return $this->formatResponse(false, 400, 'Invalid state parameter');
         }
 
         if (!$request->has('code')) {
-            return response()->json(['message' => 'Authorization code not provided'], 400);
+            return $this->formatResponse(false, 400, 'Authorization code not provided');
         }
 
         try {
@@ -73,29 +72,15 @@ class JumpCloudProvider implements SSOProviderInterface
                 'given_name' => $userData['given_name'] ?? null,
                 'family_name' => $userData['family_name'] ?? null,
                 'email_verified' => $userData['email_verified'] ?? false,
-                "accessToken" => $accessToken
+                'accessToken' => $accessToken,
             ];
 
-            return response()->json([
-                'status' => true,
-                'message' => 'JumpCloud login successful.',
-                'data' => $userDetails,
-            ]);
+            return $this->formatResponse(true, 200, 'JumpCloud login successful.', $userDetails);
         } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Exception: ' . $e->getMessage(),
-            ], 500);
+            return $this->formatResponse(false, 500, 'Exception occurred: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Get access token using authorization code.
-     *
-     * @param string $code
-     * @return string
-     * @throws \Exception
-     */
     protected function getAccessToken($code)
     {
         $response = Http::asForm()->post($this->tokenUrl, [
@@ -113,13 +98,6 @@ class JumpCloudProvider implements SSOProviderInterface
         return $response->json('access_token');
     }
 
-    /**
-     * Get user information using access token.
-     *
-     * @param string $token
-     * @return array
-     * @throws \Exception
-     */
     protected function getUserByToken($token)
     {
         $response = Http::withToken($token)->get($this->userInfoUrl);
@@ -127,8 +105,7 @@ class JumpCloudProvider implements SSOProviderInterface
         if (!$response->successful()) {
             throw new \Exception('Failed to fetch user information: ' . $response->body());
         }
-        $userData = $response->json();
 
-        return $userData;
+        return $response->json();
     }
 }

@@ -8,77 +8,109 @@ use Sahdev\SSO\Contracts\SSOProviderInterface;
 
 class LinkedinProvider implements SSOProviderInterface
 {
+    protected $clientId;
+    protected $clientSecret;
+    protected $redirectUri;
+    protected $authUrl = 'https://www.linkedin.com/oauth/v2/authorization';
+    protected $tokenUrl = 'https://www.linkedin.com/oauth/v2/accessToken';
+    protected $userInfoUrl = 'https://api.linkedin.com/v2/me';
+    protected $emailUrl = 'https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))';
+
+    public function __construct()
+    {
+        $this->clientId = config('sso.linkedin.client_id');
+        $this->clientSecret = config('sso.linkedin.client_secret');
+        $this->redirectUri = config('sso.linkedin.redirect');
+    }
+
+    protected function formatResponse($status, $statusCode, $message, $data = null)
+    {
+        return [
+            'status' => $status,
+            'status_code' => $statusCode,
+            'message' => $message,
+            'data' => $data,
+        ];
+    }
 
     public function redirect()
     {
-        $clientId = config('sso.providers.linkedin.client_id');
-        $redirectUri = urlencode(config('sso.providers.linkedin.redirect'));
         $scope = 'r_liteprofile r_emailaddress';
         $state = csrf_token();
-        $url = "https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=$clientId&redirect_uri=$redirectUri&scope=$scope&state=$state";
 
-        return redirect($url);
+        $query = http_build_query([
+            'response_type' => 'code',
+            'client_id' => $this->clientId,
+            'redirect_uri' => $this->redirectUri,
+            'scope' => $scope,
+            'state' => $state,
+        ]);
+
+        return redirect($this->authUrl . '?' . $query);
     }
 
     public function callback(Request $request)
     {
         try {
-            // Get the authorization code from the request
             $code = $request->get('code');
             if (!$code) {
-                return response()->json(['status' => false, 'message' => 'Authorization code not found.'], 400);
+                return $this->formatResponse(false, 400, 'Authorization code not found.');
             }
 
-            // Exchange the authorization code for an access token
-            $tokenResponse = Http::asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', [
-                'grant_type' => 'authorization_code',
-                'code' => $code,
-                'redirect_uri' => config('sso.providers.linkedin.redirect'),
-                'client_id' => config('sso.providers.linkedin.client_id'),
-                'client_secret' => config('sso.providers.linkedin.client_secret'),
-            ]);
+            $accessToken = $this->getAccessToken($code);
 
-            if (!$tokenResponse->successful()) {
-                return response()->json(['status' => false, 'message' => 'Failed to get access token.'], 500);
-            }
+            $userInfo = $this->getUserInfo($accessToken);
+            $emailInfo = $this->getUserEmail($accessToken);
 
-            $accessToken = $tokenResponse->json()['access_token'];
+            $userDetails = [
+                "id" => $userInfo['id'] ?? null,
+                "first_name" => $userInfo['localizedFirstName'] ?? null,
+                "last_name" => $userInfo['localizedLastName'] ?? null,
+                "email" => $emailInfo ?? null,
+            ];
 
-            // Fetch user information from LinkedIn
-            $userResponse = Http::withToken($accessToken)
-                ->get('https://api.linkedin.com/v2/me');
-
-            if (!$userResponse->successful()) {
-                return response()->json(['status' => false, 'message' => 'Failed to fetch user info.'], 500);
-            }
-
-            // Fetch user's email address from LinkedIn
-            $emailResponse = Http::withToken($accessToken)
-                ->get('https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))');
-
-            if (!$emailResponse->successful()) {
-                return response()->json(['status' => false, 'message' => 'Failed to fetch user email.'], 500);
-            }
-
-            // Prepare user data
-            $userInfo = $userResponse->json();
-            $emailInfo = $emailResponse->json()['elements'][0]['handle~']['emailAddress'];
-
-            return response()->json([
-                'status' => true,
-                'message' => 'LinkedIn login successful.',
-                'data' => [
-                    "id" => $userInfo['id'],
-                    "first_name" => $userInfo['localizedFirstName'],
-                    "last_name" => $userInfo['localizedLastName'],
-                    "email" => $emailInfo,
-                ],
-            ]);
+            return $this->formatResponse(true, 200, 'LinkedIn login successful.', $userDetails);
         } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Exception: ' . $e->getMessage(),
-            ], 500);
+            return $this->formatResponse(false, 500, 'Exception occurred: ' . $e->getMessage());
         }
+    }
+
+    protected function getAccessToken($code)
+    {
+        $response = Http::asForm()->post($this->tokenUrl, [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'redirect_uri' => $this->redirectUri,
+            'client_id' => $this->clientId,
+            'client_secret' => $this->clientSecret,
+        ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('Failed to get access token: ' . $response->body());
+        }
+
+        return $response->json()['access_token'];
+    }
+
+    protected function getUserInfo($accessToken)
+    {
+        $response = Http::withToken($accessToken)->get($this->userInfoUrl);
+
+        if (!$response->successful()) {
+            throw new \Exception('Failed to fetch user info: ' . $response->body());
+        }
+
+        return $response->json();
+    }
+
+    protected function getUserEmail($accessToken)
+    {
+        $response = Http::withToken($accessToken)->get($this->emailUrl);
+
+        if (!$response->successful()) {
+            throw new \Exception('Failed to fetch user email: ' . $response->body());
+        }
+
+        return $response->json()['elements'][0]['handle~']['emailAddress'] ?? null;
     }
 }

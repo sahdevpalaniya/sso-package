@@ -9,6 +9,7 @@ This Laravel Composer package provides seamless integration for multiple Single 
 * JumpCloud
 * LinkedIn
 * Twitter
+* AWS Cognito
 
 The package is designed to be modular, scalable, and easy to configure for any Laravel application.
 
@@ -16,201 +17,260 @@ The package is designed to be modular, scalable, and easy to configure for any L
 
 ## Installation
 
-1. **Require the Package**
+### Step 1: Require the Package
 
-   ```bash
-   composer require sahdevpalaniya/laravel-multi-sso
-   ```
+```bash
+composer require sahdevpalaniya/laravel-multi-sso
+```
 
-2. **Publish the Configuration** Publish the configuration file to your Laravel project:
+### Step 2: Publish the Configuration
 
-   ```bash
-   php artisan vendor:publish --tag=sso-config
-   ```
+Publish the configuration file to your Laravel project:
 
-   This will create a configuration file (`sso.php`) in the `config` directory.
+```bash
+php artisan vendor:publish --tag=sso-config
+```
 
-3. **Generate Configuration File** The configuration file will look like this:
+This will create a configuration file (`sso.php`) in the `config` directory.
 
-   ```php
-   <?php
-   return [
-       'providers' => [
-           'google' => [
-               'client_id' => env('SSO_GOOGLE_CLIENT_ID'),
-               'client_secret' => env('SSO_GOOGLE_CLIENT_SECRET'),
-               'redirect' => env('SSO_GOOGLE_REDIRECT'),
-           ],
-       ],
-      // Add more SSO configurations keys
-   ];
-   ```
+### Step 3: Configure the Environment
 
-4. **Add Service Provider** Register the service provider in `config/app.php` (if not automatically added):
-
-   ```php
-   'providers' => [
-       Sahdev\SSO\SSOServiceProvider::class,
-   ],
-   ```
-
-5. **Configure Environment Variables** Add the necessary environment variables for your desired SSO providers in the `.env` file. Below are detailed instructions for each provider:
-
-   ### GitHub
-
-   Example:
-
-   ```env
-   GITHUB_CLIENT_ID=your-github-client-id
-   GITHUB_CLIENT_SECRET=your-github-client-secret
-   GITHUB_REDIRECT_URI=https://yourdomain.com/callback/github
-   ```
-
-   Generate Keys:
-
-   1. Visit [GitHub Developer Settings](https://github.com/settings/developers).
-
-   2. Click on "New OAuth App" and provide the following details:
-
-      * **Application Name**: Your app name
-      * **Homepage URL**: [https://yourdomain.com](https://yourdomain.com)
-      * **Authorization Callback URL**: [https://yourdomain.com/callback/github](https://yourdomain.com/callback/github)
-
-   3. Save the app to get the **Client ID** and **Client Secret**.
-
-   ### Google
-
-   Example:
-
-   ```env
-   GOOGLE_CLIENT_ID=your-google-client-id
-   GOOGLE_CLIENT_SECRET=your-google-client-secret
-   GOOGLE_REDIRECT_URI=https://yourdomain.com/callback/google
-   ```
-
-   Generate Keys:
-
-   1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-   2. Create a new project.
-   3. Enable the "OAuth consent screen" and configure the required scopes.
-   4. Create credentials for "OAuth 2.0 Client IDs" and provide the redirect URI: [https://yourdomain.com/callback/google](https://yourdomain.com/callback/google).
-   5. Save to get the **Client ID** and **Client Secret**.
-
-   ### JumpCloud
-
-   Example:
-
-   ```env
-   JUMPCLOUD_ENTITY_ID=your-jumpcloud-entity-id
-   JUMPCLOUD_SSO_URL=your-jumpcloud-sso-url
-   JUMPCLOUD_CERTIFICATE=your-jumpcloud-certificate
-   ```
-
-   Generate Keys:
-
-   1. Log in to [JumpCloud Admin Portal](https://console.jumpcloud.com/).
-   2. Go to "SSO" and add a new application.
-   3. Configure the SSO URL, Entity ID, and X.509 Certificate.
-   4. Use the generated details in your `.env` file.
-
-   ### LinkedIn
-
-   Example:
-
-   ```env
-   LINKEDIN_CLIENT_ID=your-linkedin-client-id
-   LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
-   LINKEDIN_REDIRECT_URI=https://yourdomain.com/callback/linkedin
-   ```
-
-   Generate Keys:
-
-   1. Visit [LinkedIn Developer Portal](https://www.linkedin.com/developers/).
-   2. Create a new app and configure the redirect URI: [https://yourdomain.com/callback/linkedin](https://yourdomain.com/callback/linkedin).
-   3. Save the app to get the **Client ID** and **Client Secret**.
-
-   ### Twitter
-
-   Example:
-
-   ```env
-   TWITTER_CLIENT_ID=your-twitter-client-id
-   TWITTER_CLIENT_SECRET=your-twitter-client-secret
-   TWITTER_REDIRECT_URI=https://yourdomain.com/callback/twitter
-   ```
-
-   Generate Keys:
-
-   1. Visit [Twitter Developer Portal](https://developer.twitter.com/).
-   2. Create a new project and app.
-   3. Configure the callback URL: [https://yourdomain.com/callback/twitter](https://yourdomain.com/callback/twitter).
-   4. Save to get the **API Key** (Client ID) and **API Secret Key** (Client Secret).
+Add the necessary environment variables for your desired SSO providers in the `.env` file. Below are the detailed configurations for each provider.
 
 ---
 
-## Usage
+## Supported Providers
 
-1. **Routes** The package provides predefined routes for redirecting to the SSO providers and handling callbacks. Add these routes in your `routes/web.php` file:
+### GitHub
 
-   ```php
-   Route::get('/auth/redirect/{provider}', [SSOManager::class, 'redirect'])->name('sso.redirect');
-   Route::get('/auth/callback/{provider}', [SSOManager::class, 'callback'])->name('sso.callback');
-   ```
+**Configuration:**
 
-2. **Redirect to SSO Provider** Use the following URL format to redirect users to the desired SSO provider:
+```env
+SSO_GITHUB_CLIENT_ID=your-github-client-id
+SSO_GITHUB_CLIENT_SECRET=your-github-client-secret
+SSO_GITHUB_REDIRECT=https://yourdomain.com/sso/github/callback
+```
 
-   ```
-   /auth/redirect/{provider}
-   ```
+**Routes:**
 
-   Replace `{provider}` with one of the supported providers (`github`, `google`, `jumpcloud`, `linkedin`, `twitter`).
+```php
+Route::get('/sso/github/redirect', function () {
+    return SSO::driver('github')->redirect();
+})->name('github.redirect');
 
-3. **Handle Callback** After successful authentication, the callback URL will process the user information and provide access to authenticated user data.
+Route::get('/sso/github/callback', function (Request $request) {
+    $githubData = SSO::driver('github')->callback($request);
+    return response()->json($githubData->getData()->data);
+})->name('github.callback');
+```
 
-4. **Example Implementation** Below is an example of handling callback data using the package's `getData` method:
+---
 
-   ```php
-   use Illuminate\Http\Request;
-   use YourVendor\SSO\Facades\SSO;
+### Google
 
-   Route::get('/auth/callback/{provider}', function (Request $request, $provider) {
-       try {
-           $providerData = SSO::driver($provider)->callback($request);
-           $userData = $providerData->getData()->data; // Access user data
+**Configuration:**
 
-           // Example: Log the user data
-           logger()->info('User Data:', (array) $userData);
+```env
+SSO_GOOGLE_CLIENT_ID=your-google-client-id
+SSO_GOOGLE_CLIENT_SECRET=your-google-client-secret
+SSO_GOOGLE_REDIRECT=https://yourdomain.com/sso/google/callback
+```
 
-           // Redirect to dashboard or other page
-           return redirect('/dashboard')->with('user', $userData);
-       } catch (Exception $e) {
-           return redirect('/login')->withErrors(['error' => $e->getMessage()]);
-       }
-   });
-   ```
+**Routes:**
 
-   The `getData()` method returns the user data provided by the SSO provider. Adjust the implementation based on your application's needs.
+```php
+Route::get('/sso/google/redirect', function () {
+    return SSO::driver('google')->redirect();
+})->name('google.redirect');
+
+Route::get('/sso/google/callback', function (Request $request) {
+    $googleData = SSO::driver('google')->callback($request);
+    return response()->json($googleData->getData()->data);
+})->name('google.callback');
+```
+
+---
+
+### JumpCloud
+
+**Configuration:**
+
+```env
+SSO_JUMPCLOUD_ENTITY_ID=your-jumpcloud-entity-id
+SSO_JUMPCLOUD_SSO_URL=your-jumpcloud-sso-url
+SSO_JUMPCLOUD_CERTIFICATE=your-jumpcloud-certificate
+```
+
+**Routes:**
+
+```php
+Route::get('/sso/jumpcloud/redirect', function () {
+    return SSO::driver('jumpcloud')->redirect();
+})->name('jumpcloud.redirect');
+
+Route::get('/sso/jumpcloud/callback', function (Request $request) {
+    $jumpcloudData = SSO::driver('jumpcloud')->callback($request);
+    return response()->json($jumpcloudData->getData()->data);
+})->name('jumpcloud.callback');
+```
+
+---
+
+### LinkedIn
+
+**Configuration:**
+
+```env
+SSO_LINKEDIN_CLIENT_ID=your-linkedin-client-id
+SSO_LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
+SSO_LINKEDIN_REDIRECT=https://yourdomain.com/sso/linkedin/callback
+```
+
+**Routes:**
+
+```php
+Route::get('/sso/linkedin/redirect', function () {
+    return SSO::driver('linkedin')->redirect();
+})->name('linkedin.redirect');
+
+Route::get('/sso/linkedin/callback', function (Request $request) {
+    $linkedinData = SSO::driver('linkedin')->callback($request);
+    return response()->json($linkedinData->getData()->data);
+})->name('linkedin.callback');
+```
+
+---
+
+### Twitter
+
+**Configuration:**
+
+```env
+SSO_TWITTER_CLIENT_ID=your-twitter-client-id
+SSO_TWITTER_CLIENT_SECRET=your-twitter-client-secret
+SSO_TWITTER_REDIRECT=https://yourdomain.com/sso/twitter/callback
+```
+
+**Routes:**
+
+```php
+Route::get('/sso/twitter/redirect', function () {
+    return SSO::driver('twitter')->redirect();
+})->name('twitter.redirect');
+
+Route::get('/sso/twitter/callback', function (Request $request) {
+    $twitterData = SSO::driver('twitter')->callback($request);
+    return response()->json($twitterData->getData()->data);
+})->name('twitter.callback');
+```
+
+---
+
+### AWS Cognito
+
+**Configuration:**
+
+```env
+SSO_AWS_COGNITO_CLIENT_ID=your-aws-cognito-client-id
+SSO_AWS_COGNITO_CLIENT_SECRET=your-aws-cognito-client-secret
+SSO_AWS_COGNITO_REGION=your-aws-region
+SSO_AWS_COGNITO_USER_POOL_ID=your-aws-cognito-user-pool-id
+```
+
+**Routes:**
+
+#### Register User
+
+```php
+Route::post('/sso/aws/register', function (Request $request) {
+    $response = SSO::driver('aws')->register($request);
+    return response()->json($response);
+})->name('aws.register');
+```
+
+| Parameter      | Type     | Required | Description                              |
+| -------------- | -------- | -------- | ---------------------------------------- |
+| `username`     | `string` | Yes      | Unique username for the user.            |
+| `password`     | `string` | Yes      | Password for the user account.           |
+| `email`        | `string` | Yes      | User's email address.                    |
+| `phone_number` | `string` | No       | User's phone number.                     |
+| `full_name`    | `string` | No       | Full name of the user.                   |
+| `first_name`   | `string` | No       | First name of the user.                  |
+| `last_name`    | `string` | No       | Last name of the user.                   |
+| `locale`       | `string` | No       | User's preferred locale (e.g., `en-US`). |
+
+#### Login User
+
+```php
+Route::post('/sso/aws/login', function (Request $request) {
+    $response = SSO::driver('aws')->login($request);
+    return response()->json($response);
+})->name('aws.login');
+```
+
+| Parameter  | Type     | Required | Description      |
+| ---------- | -------- | -------- | ---------------- |
+| `username` | `string` | Yes      | User's username. |
+| `password` | `string` | Yes      | User's password. |
+
+#### Get User Details
+
+```php
+Route::post('/sso/aws/user-details', function (Request $request) {
+    $response = SSO::driver('aws')->getUserDetails($request);
+    return response()->json($response);
+})->name('aws.user.details');
+```
+
+| Parameter      | Type     | Required | Description                        |
+| -------------- | -------- | -------- | ---------------------------------- |
+| `access_token` | `string` | Yes      | Access token received after login. |
+
+#### Logout User
+
+```php
+Route::post('/sso/aws/logout', function (Request $request) {
+    $response = SSO::driver('aws')->logout($request);
+    return response()->json($response);
+})->name('aws.logout');
+```
+
+| Parameter      | Type     | Required | Description                        |
+| -------------- | -------- | -------- | ---------------------------------- |
+| `access_token` | `string` | Yes      | Access token received after login. |
+
+---
+
+## Attribute Mapping for AWS Cognito
+
+The `attributes` array in the `register` API accepts the following keys:
+
+| Input Key      | Required | Description              |
+| -------------- | -------- | ------------------------ |
+| `email`        | Yes      | User's email address.    |
+| `phone_number` | No       | User's phone number.     |
+| `full_name`    | No       | Full name of the user.   |
+| `first_name`   | No       | First name of the user.  |
+| `last_name`    | No       | Last name of the user.   |
+| `locale`       | No       | User's preferred locale. |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Feel free to fork see [CONTRIBUTING](CONTRIBUTING) and submit PR.
+Contributions are welcome! Feel free to fork the repository and submit PRs.
+
+---
 
 ## Changelog
 
-## See [CHANGELOG](CHANGELOG) for a detailed history of changes.
+See [CHANGELOG](CHANGELOG) for a detailed history of changes.
+
+---
 
 ## License
 
-This project is open-source and licensed under the MIT License. You are free to use, modify, and distribute this package in your own projects, whether for personal or commercial purposes, under the following conditions:
-
-1. **Attribution**: Credit must be given to the original authors and contributors. The license text must remain intact in all copies or significant portions of the software.
-2. **No Warranty**: The software is provided "as-is," without any warranty, express or implied, including but not limited to fitness for a particular purpose.
-
-We welcome contributions to this project. Feel free to fork the repository, suggest improvements, or submit pull requests to make this package better for the community.
-
-The full license text can be found in the [LICENSE](LICENSE) file in this repository.
+This project is open-source and licensed under the MIT License.
 
 ---
 
